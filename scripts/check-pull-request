@@ -2,11 +2,13 @@
 
 import os
 import subprocess
+import sys
+
 import github
 
 
-def get_github_info(gh):
-    pull_data = gh.repos("reddit")("reddit-public").pulls(os.environ['GHPULL']).get()
+def get_github_info(gh, upstream_repo_user, upstream_repo_name):
+    pull_data = gh.repos(upstream_repo_user)(upstream_repo_name).pulls(os.environ['GHPULL']).get()
     target_url = os.environ['BUILD_URL']
 
     user = pull_data.head.repo.owner.login
@@ -46,7 +48,7 @@ def process_check_code():
     return (status, description)
 
 
-def update_pull_request_status(gh, build_url, status, description):
+def update_pull_request_status(gh, repo_name, build_url, status, description):
     status = {'state': status, 'target_url': target_url, 'description': description}
 
     print "Setting status to:", status
@@ -54,12 +56,16 @@ def update_pull_request_status(gh, build_url, status, description):
     gh.repos(user)(repo_name).statuses(commit_hash).post(**status)
 
 
-def main():
+def main(upstream_repo_user, upstream_repo_name):
     gh = github.GitHub(access_token=os.environ['GHTOKEN'])
+    user, repo_url, repo_name, commit_hash = get_github_info(gh, upstream_repo_user, upstream_repo_name)
     setup_remote(user, repo_url, commit_hash)
     status, description = process_check_code()
-    update_pull_request_status(gh, build_url, status, description)
+    update_pull_request_status(gh, repo_name, build_url, status, description)
 
 
 if __name__ == '__main__':
-    main()
+    repo_user = sys.argv[1]
+    repo_name = sys.argv[2]
+    main(repo_user, repo_name)
+
