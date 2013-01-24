@@ -1,0 +1,65 @@
+#!/usr/bin/python
+
+import os
+import subprocess
+import github
+
+
+def get_github_info(gh):
+    pull_data = gh.repos("reddit")("reddit-public").pulls(os.environ['GHPULL']).get()
+    target_url = os.environ['BUILD_URL']
+
+    user = pull_data.head.repo.owner.login
+    repo_url = pull_data.head.repo.ssh_url
+    repo_name = pull_data.head.repo.name
+    commit_hash = pull_data.head.sha
+    return user, repo_url, repo_name, commit_hash
+
+
+def setup_remote(user, repo_url, commit_hash):
+    print "Calling: git remote add", user, repo_url
+    subprocess.call(['git', 'remote', 'add', user, repo_url])
+    subprocess.check_call(['git', 'fetch', user])
+    subprocess.check_call(['git', 'checkout', commit_hash])
+
+
+def process_check_code():
+    subprocess.call(['python', 'r2/check-code', '-O', 'regression.out', 'regression'])
+
+    with open("r2/regression.out") as f:
+        lines = f.readlines()
+
+    added = removed = 0
+    for line in lines:
+        if line.startswith("added"):
+            added = int(line.split()[1])
+        elif line.startswith("removed"):
+            removed = int(line.split()[1])
+
+    change = added - removed
+    if change > 5:
+        status = 'failure'
+    else:
+        status = 'success'
+    description = "check-code reports: " + "; ".join(lines)
+
+    return (status, description)
+
+
+def update_pull_request_status(gh, build_url, status, description):
+    status = {'state': status, 'target_url': target_url, 'description': description}
+
+    print "Setting status to:", status
+
+    gh.repos(user)(repo_name).statuses(commit_hash).post(**status)
+
+
+def main():
+    gh = github.GitHub(access_token=os.environ['GHTOKEN'])
+    setup_remote(user, repo_url, commit_hash)
+    status, description = process_check_code()
+    update_pull_request_status(gh, build_url, status, description)
+
+
+if __name__ == '__main__':
+    main()
