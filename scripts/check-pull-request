@@ -9,7 +9,6 @@ import github
 
 def get_github_info(gh, upstream_repo_user, upstream_repo_name):
     pull_data = gh.repos(upstream_repo_user)(upstream_repo_name).pulls(os.environ['GHPULL']).get()
-    target_url = os.environ['BUILD_URL']
 
     user = pull_data.head.repo.owner.login
     repo_url = pull_data.head.repo.ssh_url
@@ -26,9 +25,13 @@ def setup_remote(user, repo_url, commit_hash):
 
 
 def process_check_code():
+    try:
+        os.remove('regression.out')
+    except OSError:
+        pass
     subprocess.call(['python', 'r2/check-code', '-O', 'regression.out', 'regression'])
 
-    with open("r2/regression.out") as f:
+    with open('regression.out') as f:
         lines = f.readlines()
 
     added = removed = 0
@@ -49,6 +52,7 @@ def process_check_code():
 
 
 def update_pull_request_status(gh, repo_name, build_url, status, description):
+    target_url = os.environ['BUILD_URL']
     status = {'state': status, 'target_url': target_url, 'description': description}
 
     print "Setting status to:", status
